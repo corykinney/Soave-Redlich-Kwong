@@ -1,0 +1,305 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb}
+
+\usepackage{biblatex}
+\addbibresource{references.bib}
+
+
+\newcommand{\pderiv}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\npderiv}[3]{\frac{\partial^#1 #2}{\partial #3^#1}}
+\newcommand{\pderivconst}[3]{\left(\pderiv{#1}{#2}\right)_{#3}}
+
+
+\title{Implementation of Multi-component Soave-Redlich-Kwong Equation of State in Cantera}
+\author{Cory Kinney \\ University of Central Florida}
+\date{May 2023}
+
+\begin{document}
+\maketitle
+
+
+\section{Overview}
+In addition to the ideal gas equation of state (EoS), \textsc{Cantera} \cite{cantera} currently has implementations of the Redlich-Kwong \cite{redlichkwong} and Peng-Robinson \cite{peng1976new} real gas equations of state. This paper outlines the approach taken to implement the Soave modification \cite{soave1972equilibrium} of the Redlich-Kwong EoS. 
+
+ 
+
+\section{Soave-Redlich-Kwong EoS}
+The Soave-Redlich-Kwong (SRK) EoS is given by
+\begin{equation}
+p = \frac{RT}{\nu-b}-\frac{a\alpha}{\nu(\nu+b)}\label{eq:SRK}
+\end{equation}
+where $p$ is pressure, $R$ is the universal gas constant, $T$ is temperature, and $\nu$ is the molar volume. The species-specific Van der Waals attraction parameter $a$ and the the repulsive, volume correction parameter $b$ are calculated as
+\begin{equation}
+    a = \frac{\Omega_a R^2 T_c^2}{p_c}\label{eq:a}
+\end{equation}
+\begin{equation}
+    b = \frac{\Omega_b R T_c}{p_c}\label{eq:b}
+\end{equation}
+where the constants $\Omega_a$ and $\Omega_b$ are defined as
+\begin{equation}
+    \Omega_a = \left[9(2^{1/3}-1)\right]^{-1} \approx 0.42748
+\end{equation}
+\begin{equation}
+    \Omega_b = \frac{2^{1/3}-1}{3} \approx 0.08664
+\end{equation}
+The temperature dependent interaction parameter $\alpha$ is given as
+\begin{equation}
+    \alpha(T) = \left[1 + \kappa\left(1 - \sqrt{\frac{T}{T_c}}\right)\right]^2 \label{eq:alpha}
+\end{equation}
+where $\kappa$ is given by
+\begin{equation}
+    \kappa = 0.480 + 1.574\omega - 0.176\omega^2
+\end{equation}
+which is a function of the acentric factor ($\omega$) of the species.
+
+
+\subsection{Multi-component Soave-Redlich-Kwong EoS}
+The pure fluid SRK EoS can be generalized for a multi-component mixture as
+\begin{equation}
+    p = \frac{RT}{\nu-b_{mix}}-\frac{(a\alpha)_{mix}}{\nu(\nu+b_{mix})}\label{eq:multicomponent}
+\end{equation}
+The mixture averaged properties are defined as 
+\begin{equation}
+    a_{mix} = \sum_i \sum_j X_i X_j a_{ij}
+\end{equation}
+\begin{equation}
+    b_{mix} = \sum_i X_i b_i
+\end{equation}
+\begin{equation}
+    (a\alpha)_{mix} = \sum_i \sum_j X_i X_j (a\alpha)_{ij}\label{eq:aalpha_mix}
+\end{equation}
+The default species interaction parameters $a_{ij}$ and $(a\alpha)_{ij}$ are defined by the geometric average of the pure-species parameters
+\begin{equation}
+    a_{ij} = \sqrt{a_i a_j}
+\end{equation}
+\begin{equation}
+    (a\alpha)_{ij} = \sqrt{(a\alpha)_i(a\alpha)_j}\label{eq:aalpha_ij}
+\end{equation}
+
+
+\subsection{Critical properties}
+Critical properties can be calculated from the species parameters, $a$ and $b$, and the EoS-specific constants.
+Dividing \eqref{eq:a} by \eqref{eq:b} gives
+\begin{equation*}
+    \frac{a}{b} = \frac{\Omega_aRT_c}{\Omega_b}
+\end{equation*}
+solving for critical temperature yields
+\begin{equation}
+    T_c = \frac{a\Omega_b}{b\Omega_a R}\label{eq:Tc}
+\end{equation}
+Rearranging \eqref{eq:b} to solve for critical pressure
+\begin{equation*}
+    p_c = \frac{\Omega_bRT_c}{b}
+\end{equation*}
+and then substituting \eqref{eq:Tc} yields
+\begin{equation}
+    p_c = \frac{a\Omega_b^2}{\Omega_ab^2}\label{eq:PC}
+\end{equation}
+The critical properties for the multi-component case can also be calculated from the mixtured averaged properties using 
+\begin{equation}
+    T_{c,mix} = \frac{a_{mix}\Omega_b}{b_{mix}\Omega_a R}\label{eq:Tc_mix}
+\end{equation}
+\begin{equation}
+    p_{c,mix} = \frac{a_{mix}\Omega_b^2}{\Omega_a{b_{mix}}^2}\label{eq:PC_mix}
+\end{equation}
+
+
+\subsection{Cubic Form}
+The cubic form in terms of molar volume can be obtained by multiplying both sides of \eqref{eq:SRK} by the denominators of the right hand side which gives
+\begin{equation*}
+    p\nu(\nu-b)(\nu+b) = RT\nu(\nu+b) - a\alpha(\nu-b)
+\end{equation*}
+expanding and rearranging gives
+\begin{equation*}
+    p\nu(\nu^2-b^2) = RT(\nu^2+b\nu)-a\alpha(\nu-b)
+\end{equation*}
+\begin{equation*}
+    p\nu^3-b^2p\nu-RT\nu^2-bRT\nu+a\alpha\nu-a\alpha b=0
+\end{equation*}
+finally, grouping like terms and dividing by pressure yields the cubic form
+\begin{equation}
+    \nu^3-\frac{RT}{p}\nu^2+\left(\frac{a\alpha - bRT}{p}-b^2\right)\nu - \frac{a\alpha b}{p}=0\label{eq:cubic}
+\end{equation}
+The cubic form can also be written in terms of the compressibility factor ($Z$) which is defined as
+\begin{equation}
+    Z = \frac{P\nu}{RT}
+\end{equation}
+Therefore, substituting the corresponding definition of molar volume in terms of compressibility factor
+\begin{equation}
+    \nu = \frac{ZRT}{P}\label{nuZ}
+\end{equation} 
+into \eqref{eq:cubic} gives
+\begin{equation*}
+    \left(\frac{RT}{P}\right)^3Z^3 - \left(\frac{RT}{P}\right)^3Z^2 + \frac{RT}{p}\left(\frac{a\alpha - bRT}{p}-b^2\right) Z - \frac{a\alpha b}{p} = 0
+\end{equation*}
+dividing through by the first coefficient yields
+\begin{equation*}
+    Z^3 - Z^2 + \left[\frac{a\alpha p}{R^2T^2} - \frac{bp}{RT} - \left(\frac{bp}{RT}\right)^2\right] Z - \frac{a\alpha bp^2}{R^3T^3} = 0
+\end{equation*}
+which can finally be written as
+\begin{equation}
+    Z^3 - Z^2 + (A - B - B^2)Z - AB = 0\label{Zcubic}
+\end{equation}
+where the terms are $A$ and $B$ are given by
+\begin{equation}
+    A = \frac{a\alpha p}{R^2 T^2}
+\end{equation}
+\begin{equation}
+    B = \frac{bp}{RT}
+\end{equation}
+or for the multi-component SRK
+\begin{equation}
+    A_{mix} = \frac{(a\alpha)_{mix} p}{R^2 T^2} \label{eq:A}
+\end{equation}
+\begin{equation}
+    B_{mix} = \frac{b_{mix} p}{RT} \label{eq:B}
+\end{equation}
+
+
+\section{Thermodynamic Properties}
+\subsection{Helmholtz Energy Departure Function}
+
+\begin{equation}
+    \pderiv{a}{\nu}\biggr\rvert_{n_k,T} = -p
+\end{equation}
+
+\begin{equation}
+    \int_{a^\circ}^a da = -\int_{\infty}^{\nu} p d\nu
+\end{equation}
+
+\begin{equation}
+    a - a^\circ = \int_{\infty}^{\nu^\circ}pd\nu - \int_{\infty}^{\nu}pd\nu
+\end{equation}
+
+And then a couple steps later
+
+\begin{equation}
+    a - a^\circ = RT \ln\left(\frac{\nu^\circ}{\nu - b}\right) + \frac{a\alpha}{b}\ln\left(\frac{\nu}{\nu+b}\right)
+\end{equation}
+
+\subsection{Chemical Potential}
+The chemical potential of a species $i$ is given by
+\begin{equation}
+    \mu_i = \pderivconst{A}{n_i}{T,V,n_{j\neq i}}
+\end{equation}
+
+\section{Derivatives}
+\subsection{Pressure}
+The pressure derivatives of the multi-component SRK equation of state \eqref{eq:multicomponent} with respect to $\nu$ and $T$ are given by
+\begin{equation}
+    \pderivconst{p}{\nu}{T} = -\frac{RT}{(\nu-b_{mix})^2} + (a\alpha)_{mix}\frac{2\nu+b_{mix}}{[\nu(\nu+b_{mix})]^2} \label{dpdv}
+\end{equation}
+\begin{equation}
+    \pderivconst{p}{T}{\nu} = \frac{R}{\nu-b_{mix}} - \frac{1}{\nu(\nu+b_{mix})}\frac{\partial (a\alpha)_{mix}}{\partial T} \label{dpdT}
+\end{equation}
+
+
+\subsection{Molar volume}
+\subsubsection{Isothermal Compressibility}
+Isothermal compressibility is defined as 
+\begin{equation}
+    \beta_T = -\frac{1}{\nu} \pderivconst{\nu}{p}{T}
+\end{equation}
+Since the inverse of this derivative is much more easily calculated, we can apply the inverse function theorem under the assumption that the Jacobian determinant is nonzero
+\begin{equation*}
+    \pderivconst{\nu}{p}{T} = \pderivconst{p}{\nu}{T}^{-1}
+\end{equation*}
+Therefore, the isothermal compressibility takes the final form
+\begin{equation}
+    \beta_T = -\left[\nu \pderivconst{p}{\nu}{T}\right]^{-1} \label{betaT}
+\end{equation}
+from the derivative of pressure with respect to molar volume \eqref{dpdv}.
+
+
+\subsubsection{Thermal Expansion Coefficient}
+The volumetric thermal expansion coefficient is defined as
+\begin{equation}
+    \alpha_V = \frac{1}{\nu} \pderivconst{\nu}{T}{p}
+\end{equation}
+Applying the triple product rule
+\begin{equation*}
+    \pderivconst{\nu}{T}{p} \pderivconst{p}{\nu}{T} \pderivconst{T}{p}{\nu} = -1 
+\end{equation*}
+Once again applying the inverse function theorem, and then solving for the derivative of molar volume with respect to temperature yields
+\begin{equation*}
+    \pderivconst{\nu}{T}{p} = -\frac{\pderivconst{p}{T}{\nu}}{\pderivconst{p}{\nu}{T}}
+\end{equation*}
+Therefore, the thermal expansion coefficient takes the final form
+\begin{equation}
+    \alpha_V = -\frac{1}{\nu} \frac{\pderivconst{p}{T}{\nu}}{\pderivconst{p}{\nu}{T}} \label{alphaV}
+\end{equation}
+from the derivatives of pressure with respect to temperature \eqref{dpdT} and molar volume \eqref{dpdv}. 
+
+
+\subsection{Mixing Expressions}
+Of the mixture averaged parameters, only $(a\alpha)_{mix}$ is temperature-dependent. The derivative of \eqref{eq:aalpha_mix} with respect to 
+temperature is simply the sum of the derivatives of all of the species interaction parameters 
+\begin{equation}
+    \pderiv{(a\alpha)_{mix}}{T} = \sum_i \sum_j X_i X_j \pderiv{(a\alpha)_{ij}}{T}
+\end{equation}
+Therefore, taking the derivative of \eqref{eq:aalpha_ij} with respect to temperature
+\begin{equation*}
+    \pderiv{(a\alpha)_{ij}}{T} = \frac{1}{2\sqrt{(a\alpha)_i(a\alpha)_j}} \left[ \pderiv{(a\alpha)_i}{T} (a\alpha)_j + (a\alpha)_i \pderiv{(a\alpha)_j}{T}\right]
+\end{equation*}
+which can be written
+\begin{equation*}
+    \pderiv{(a\alpha)_{ij}}{T} = \frac{\sqrt{(a\alpha)_i(a\alpha)_j}}{2} \left[ \frac{1}{(a\alpha)_i}\pderiv{(a\alpha)_i}{T} + \frac{1}{(a\alpha)_j}\pderiv{(a\alpha)_j}{T}\right]
+\end{equation*}
+and after substituting \eqref{eq:aalpha_ij} yields
+\begin{equation}
+    \pderiv{(a\alpha)_{ij}}{T} = \frac{(a\alpha)_{ij}}{2} \left[ \frac{1}{(a\alpha)_i}\pderiv{(a\alpha)_i}{T} + \frac{1}{(a\alpha)_j}\pderiv{(a\alpha)_j}{T}\right] \label{eq:daalpha_ij}
+\end{equation}
+Taking the derivative with respect to temperature a second times goes as follows
+\begin{equation*}
+\begin{split}
+    \npderiv{2}{(a\alpha)_{ij}}{T} = \frac{1}{2} \pderiv{(a\alpha)_{ij}}{T} \left[ \frac{1}{(a\alpha)_i}
+    \pderiv{(a\alpha)_i}{T} + \frac{1}{(a\alpha)_j}\pderiv{(a\alpha)_j}{T}\right] \\ + \frac{(a\alpha)_{ij}}{2} 
+    \biggl[ \frac{1}{(a\alpha)_i}\npderiv{2}{(a\alpha)_i}{T}-\frac{1}{(a\alpha)_i^2}\pderiv{(a\alpha)_i}{T}^2 + \\
+    \frac{1}{(a\alpha)_j}\npderiv{2}{(a\alpha)_j}{T}-\frac{1}{(a\alpha)_j^2}\pderiv{(a\alpha)_j}{T}^2 \biggr]
+\end{split}
+\end{equation*}
+The first term can be simplified using \eqref{eq:daalpha_ij} giving
+\begin{equation}
+\begin{split}
+    \npderiv{2}{(a\alpha)_{ij}}{T} = \frac{1}{(a\alpha)_{ij}} \pderiv{(a\alpha)_{ij}}{T}^2 + \frac{(a\alpha)_{ij}}{2} 
+    \biggl[ \frac{1}{(a\alpha)_i}\npderiv{2}{(a\alpha)_i}{T}-\frac{1}{(a\alpha)_i^2}\pderiv{(a\alpha)_i}{T}^2 + \\
+    \frac{1}{(a\alpha)_j}\npderiv{2}{(a\alpha)_j}{T}-\frac{1}{(a\alpha)_j^2}\pderiv{(a\alpha)_j}{T}^2 \biggr]
+\end{split}
+\end{equation}
+
+\subsubsection{Species Parameters}
+The first and second derivatives of the species parameters are needed for the mixture derivatives. Since $a$ is not temperature-dependent
+\begin{equation}
+    \pderiv{(a\alpha)_i}{T} = a_i \pderiv{\alpha_i}{T}
+\end{equation}
+and
+\begin{equation}
+    \npderiv{2}{(a\alpha)_i}{T} = a_i \npderiv{2}{\alpha_i}{T}
+\end{equation}
+Taking the derivative of \eqref{eq:alpha} with respect to temperature
+\begin{align*}
+    \pderiv{\alpha_i}{T} &= \pderiv{}{T}\left( \left[1 + \kappa_i\left(1 - \sqrt{\frac{T}{T_{c,i}}}\right)\right]^2 \right) \\
+    &= 2 \left[1 + \kappa_i\left(1 - \sqrt{\frac{T}{T_{c,i}}}\right)\right] \cdot \left(-\frac{\kappa_i}{\sqrt{TT_{c,i}}}\right)
+\end{align*}
+and substituting the first term for the square root of \eqref{eq:alpha} gives
+\begin{equation}
+    \pderiv{\alpha_i}{T} = -2\kappa_i\sqrt{\frac{\alpha_i}{TT_{c,i}}} \label{eq:dalpha_dT}
+\end{equation}
+Taking the derivative with respect to temperature a second time
+\begin{align*}
+    \npderiv{2}{\alpha_i}{T} &= \frac{-2\kappa_i}{\sqrt{T_{c,i}}} \pderiv{}{T}\left(\sqrt{\frac{\alpha_i}{T}}\right) \\
+    &= \frac{-2\kappa_i}{\sqrt{T_{c,i}}} \left[\frac{1}{2}\sqrt{\frac{T}{\alpha_i}}\left(\frac{1}{T}\pderiv{\alpha_i}{T} -\frac{\alpha_i}{T^2}\right)\right]
+\end{align*}
+which can be simplified to
+\begin{equation*}
+     \npderiv{2}{\alpha_i}{T} = -\kappa_i\sqrt{\frac{\alpha_i}{TT_{c,i}}}\left(\frac{1}{\alpha_i}\pderiv{\alpha_i}{T} - \frac{1}{T} \right)
+\end{equation*}
+the first term can be substituted using \eqref{eq:dalpha_dT} to give the final formula
+\begin{equation}
+     \npderiv{2}{\alpha_i}{T} = \frac{1}{2} \pderiv{\alpha_i}{T} \left(\frac{1}{\alpha_i}\pderiv{\alpha_i}{T} - \frac{1}{T} \right)
+\end{equation}
+
+\clearpage
+\printbibliography
+\end{document}
