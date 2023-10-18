@@ -159,24 +159,84 @@ or for the multi-component SRK
 
 \section{Thermodynamic Properties}
 \subsection{Helmholtz Energy Departure Function}
+In thermodynamics, the Helmholtz energy departure function, \( a - a^\circ \), is an important quantity to calculate other thermodynamic properties. In the case of the SRK EoS, this function can be derived starting from the pressure-volume relation given by equation \eqref{eq:SRK}.
 
+
+Start by considering the partial derivative of Helmholtz energy \( a \) with respect to the molar volume \( \nu \) at constant \( n_k \) and \( T \):
 \begin{equation}
-    \pderiv{a}{\nu}\biggr\rvert_{n_k,T} = -p
+    \pderiv{a}{\nu}\biggr\rvert_{n_k,T} = -p \label{eq:helmholtz_derivative}
 \end{equation}
 
+To find \( a - a^\circ \), we integrate both sides of equation \eqref{eq:helmholtz_derivative} from \( a^\circ \) to \( a \) and from \( \infty \) to \( \nu \):
 \begin{equation}
-    \int_{a^\circ}^a da = -\int_{\infty}^{\nu} p d\nu
+    \int_{a^\circ}^a da = -\int_{\infty}^{\nu} p d\nu \label{eq:integration}
 \end{equation}
 
+By performing the integration, we obtain:
 \begin{equation}
-    a - a^\circ = \int_{\infty}^{\nu^\circ}pd\nu - \int_{\infty}^{\nu}pd\nu
+    a - a^\circ = \int_{\infty}^{\nu^\circ}pd\nu - \int_{\infty}^{\nu}pd\nu \label{eq:integration_result}
 \end{equation}
 
-And then a couple steps later
+Here, \( \nu^\circ \) is the molar volume at the standard state and \( a^\circ \) is the Helmholtz energy at the standard state. 
+
+
+Inserting the SRK EoS, the integral becomes:
 
 \begin{equation}
-    a - a^\circ = RT \ln\left(\frac{\nu^\circ}{\nu - b}\right) + \frac{a\alpha}{b}\ln\left(\frac{\nu}{\nu+b}\right)
+a - a^\circ = \int_{\infty}^{\nu^\circ} \left(\frac{RT}{\nu-b} - \frac{(a\alpha)}{\nu(\nu+b)}\right) d\nu - \int_{\infty}^{\nu} \left(\frac{RT}{\nu-b} - \frac{(a\alpha)}{\nu(\nu+b)}\right) d\nu
 \end{equation}
+
+
+Separate each integral into two parts:
+
+\begin{align}
+a - a^\circ &= \left(\int_{\infty}^{\nu^\circ} \frac{RT}{\nu-b} d\nu - \int_{\infty}^{\nu^\circ} \frac{(a\alpha)}{\nu(\nu+b)} d\nu\right) \nonumber \\
+&\quad - \left(\int_{\infty}^{\nu} \frac{RT}{\nu-b} d\nu - \int_{\infty}^{\nu} \frac{(a\alpha)}{\nu(\nu+b)} d\nu\right)
+\end{align}
+
+Above we can see that there are two integrands that need to be evaluated in the expression, so we need to determine the analytical result of integrating the two expressions.
+
+\subsubsection{Perform the Integration}
+
+For \( \frac{RT}{\nu-b} \):
+\begin{equation}
+-\int \frac{RT}{\nu-b} d\nu = -RT \ln|\nu-b| + C_1
+\end{equation}
+For \( \frac{(a\alpha)}{\nu(\nu+b)} \):
+\begin{equation}
+-\int \frac{(a\alpha)}{\nu(\nu+b)} d\nu = (a\alpha) \ln|\nu+b| - (a\alpha) \ln|\nu| + C_2
+\end{equation}
+
+
+\subsubsection{Substitute back into \( a - a^\circ \)}
+
+\begin{align}
+a - a^\circ &= \left(-RT \ln|\nu^\circ - b| + (a\alpha) \ln|\nu^\circ + b| - (a\alpha) \ln|\nu^\circ|\right) \nonumber \\
+&\quad - \left(-RT \ln|\nu - b| + (a\alpha) \ln|\nu + b| - (a\alpha) \ln|\nu|\right)
+\end{align}
+Grouping terms with similar coefficients gives:
+\begin{equation}
+\begin{split}
+a - a^\circ &= RT \ln|\nu - b| -RT \ln|\nu^\circ - b| \\
+&\quad + (a\alpha) \ln|\nu^\circ + b| - (a\alpha) \ln|\nu^\circ| \\
+&\quad + (a\alpha) \ln|\nu| - (a\alpha) \ln|\nu + b|
+\end{split}
+\end{equation}
+Using standard logarithm combination rules for addition and subtraction of logarithms, this expression can be simplified to
+\begin{equation}
+\begin{split}
+a - a^\circ &= RT \ln|\frac{\nu - b}{\nu^\circ - b}| \\
+&\quad + (a\alpha) \ln|\frac{\nu^\circ + b}{\nu^\circ}| + (a\alpha) \ln|\frac{\nu}{\nu + b}||
+\end{split}
+\end{equation}
+
+The final expression is:
+
+\begin{equation}
+a - a^\circ = RT \ln\left(\frac{\nu - b}{\nu^\circ - b}\right) - (a\alpha) \ln\left(\frac{\nu(\nu^\circ + b)}{\nu^\circ(\nu + b)}\right) \label{eq:helmholtz_final}
+\end{equation}
+
+Equation \eqref{eq:helmholtz_final} provides the Helmholtz energy departure function for the SRK EoS in terms of \( \nu \), \( a \), \( b \), \( \alpha \), and \( T \).
 
 \subsection{Chemical Potential}
 The chemical potential of a species $i$ is given by
